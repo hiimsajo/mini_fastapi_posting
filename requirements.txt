@@ -4,4 +4,3 @@ sqlalchemy
 databases[aiosqlite]
 passlib[bcrypt]
 python-jose
-bcrypt
