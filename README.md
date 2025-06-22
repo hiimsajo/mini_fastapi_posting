@@ -1,4 +1,4 @@
-# mini_fastapi_project_tutorial
+# mini_fastapi_posting_project
 파이썬 fastapi 기반 게시판 만들기
 
 FastAPI 기반의 인증 기능이 있는 게시판 미니 프로젝트 입니다.
