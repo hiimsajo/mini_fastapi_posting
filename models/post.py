@@ -2,8 +2,9 @@
 from pydantic import BaseModel
 
 class UserPostIn(BaseModel):
-    name: str
+    title: str
     body: str
+    user_id: int
 
 class UserPost(UserPostIn):
     id: int

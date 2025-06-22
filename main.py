@@ -1,38 +1,17 @@
-import databases
-import sqlalchemy 
+from database import database, post_table
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status, Depends
 from models.post import UserPost, UserPostIn
+from database import user_table
+from models.user import UserIn
+from security import get_password_hash
+from security import create_access_token
+from security import authenticate_user
+from models.user import User
+from security import get_current_user
 
-DATABASE_URL = "sqlite:///data.db"
-database = databases.Database(DATABASE_URL)
-metadata = sqlalchemy.MetaData()
-post_table = sqlalchemy.Table(
-    "posta",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String),
-    sqlalchemy.Column("body", sqlalchemy.String),
-)
-
-engine = sqlalchemy.create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
-metadata.create_all(engine)
 
 app = FastAPI()
-
-'''
-@app.on_event("startup")
-async def startup():
-    await database.connect()
-
-@app.on_event("shutdown")
-async def shutdown():
-    await database.disconnect()
-
-    이건 사장된 거여서 lifespan으로 바꿈
-'''
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,12 +24,40 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 @app.post("/post", status_code=201, response_model=UserPost)
-async def create_post(post: UserPostIn):
-    query = post_table.insert().values(name=post.name, body=post.body)
+async def create_post(
+    post: UserPostIn, current_user: User = Depends(get_current_user)
+):
+    data = {**post.model_dump(), "user_id": current_user.id}
+    query = post_table.insert().values(data)
     last_record_id = await database.execute(query)
-    return {**post.model_dump(), "id": last_record_id}
+    return {**data, "id": last_record_id}
 
-@app.get("/posts", response_model=list[UserPost])
-async def get_all_posts():
-    query = post_table.select()
-    return await database.fetch_all(query)
+@app.post("/register")
+async def register(user: UserIn):
+    hashed_password = get_password_hash(user.password)
+    query = user_table.insert().values(username=user.username, password=hashed_password)
+    await database.execute(query)
+    access_token = create_access_token(user.username)
+    return {"access_token": access_token, "token_type": "bearer", "message": "가입완료!"}
+
+
+from fastapi import FastAPI, HTTPException, status
+from security import authenticate_user
+
+@app.post("/login")
+async def login(user: UserIn):
+    user = await authenticate_user(user.username, user.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(user.username)
+    return {"access_token": access_token, "token_type": "bearer", "message": "로그인 완료!"}
+
+@app.get("/users/me", response_model=User)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
